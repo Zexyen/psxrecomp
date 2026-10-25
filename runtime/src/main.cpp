@@ -2938,7 +2938,14 @@ static std::filesystem::path exe_dir_from_argv(const char* argv0) {
     // be a bare name or symlink (launched via PATH / a .desktop file). $APPIMAGE
     // is the .AppImage's own path, so settings.toml anchors next to it.
     if (exe_dir.empty()) {
-        if (const char* appimg = std::getenv("APPIMAGE"); appimg && appimg[0]) {
+        // $APPIMAGE is inherited by children of an unrelated AppImage (e.g. a
+        // terminal launched from one); trust it only when we run inside $APPDIR.
+        const char* appdir = std::getenv("APPDIR");
+        std::error_code sec;
+        const std::string self = fs::read_symlink("/proc/self/exe", sec).string();
+        const bool in_appdir = appdir && appdir[0] && !sec &&
+                               self.rfind(std::string(appdir) + "/", 0) == 0;
+        if (const char* appimg = std::getenv("APPIMAGE"); in_appdir && appimg && appimg[0]) {
             exe_dir = PSXRecompV4::host_absolute(appimg, ec).parent_path();
             if (ec) exe_dir.clear();
         }
